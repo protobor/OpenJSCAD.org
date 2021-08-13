@@ -29,7 +29,8 @@ CSGModule.prototype.evaluate = function (parentContext, inst) {
   if (childModules.length <= 1) {
     return childModules[0]
   } else {
-    return childModules[0] + '.' + this.csgOperation + '([' + childModules.slice(1).join(',\n') + '])'
+    Globals.addJscadImport('booleans', this.csgOperation)
+    return this.csgOperation + '(' + context.indentList (childModules) + ')'
   }
 }
 

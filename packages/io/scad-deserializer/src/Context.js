@@ -8,11 +8,25 @@ function Context (parentContext) {
     $fa: Globals.FA_DEFAULT
   }
   this.parentContext = parentContext
+  this.depth = parentContext ? parentContext.depth + 1 : 1
   this.inst_p
   this.functions_p = {}
   this.modules_p = {}
   Globals.context_stack.push(this)
 };
+
+Context.prototype.indent = function (adjust = 0) {
+  return "\t".repeat(this.depth + adjust)
+};
+
+Context.prototype.indentString = function (content) {
+    return content
+};
+  
+Context.prototype.indentList = function (list) {
+    return "\n" + this.indent(-1) + list.join(',\n' + this.indent(-1)) + "\n" + this.indent(-2)
+};
+
 
 Context.prototype.setVariable = function (name, value) {
   if (value !== undefined) {
@@ -66,6 +80,8 @@ Context.prototype.evaluateFunction = function (name, argnames, argvalues) {
     return this.parentContext.evaluateFunction(name, argnames, argvalues)
   }
 
+  return "/* missing function */" + name + '()'
+
   console.log("WARNING: Ignoring unknown function '" + name + "'.")
   return undefined
 }
@@ -75,6 +91,7 @@ Context.prototype.evaluateModule = function (inst, factory) {
 
   var customModule = _.find(this.modules_p, function (x) { return x.name == inst.name })
   if (customModule !== undefined) {
+    return customModule.name + '()'
     return customModule.evaluate(this, inst)
   }
 
@@ -88,6 +105,8 @@ Context.prototype.evaluateModule = function (inst, factory) {
   if (this.parentContext) {
     return this.parentContext.evaluateModule(inst, factory)
   }
+
+  return "/* missing module */" + inst.name + '()'
 
   console.log('WARNING: Ignoring unknown module: ' + inst.name)
   return undefined

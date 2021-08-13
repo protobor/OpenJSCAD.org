@@ -34,7 +34,21 @@ function preParse (text) {
     .replace(singleLineModuleRegex, singleLineModuleReplacement)
 }
 
-module.exports = {
+const modules_to_import = {}
+
+/**
+ * Cache used modules and function names to generate imports
+ * @param {string} moduleName module name to import from @jscad/modeling
+ * @param  {...string} fnNames function names to import from module
+ */
+function addJscadImport (moduleName, ...fnNames) {
+  modules_to_import[moduleName] = modules_to_import[moduleName] || {}
+  for (const fnName of fnNames) {
+    modules_to_import[moduleName][fnName] = 1
+  }
+}
+
+module.exports =  {
   DEFAULT_RESOLUTION: 16,
   DEFAULT_2D_RESOLUTION: 16,
   FN_DEFAULT: 0,
@@ -42,9 +56,11 @@ module.exports = {
   FA_DEFAULT: 12.0,
   module_stack: [],
   context_stack: [],
-  stripString: stripString,
-  convertForStrFunction: convertForStrFunction,
-  preParse: preParse,
+  modules_to_import,
+  addJscadImport,
+  stripString,
+  convertForStrFunction,
+  preParse,
   importedObjectRegex: /import\([^\"]*\"([^\)]*)\"[,]?.*\);?/gm,
   usedLibraryRegex: /use <([^>]*)>;?/gm,
   includedLibraryRegex: /include <([^>]*)>;?/gm

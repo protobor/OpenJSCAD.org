@@ -18,7 +18,7 @@ function TransformModule (factory) {
       var childAdaptor = factory.getAdaptor(childInst)
       var transformedChild = childAdaptor.evaluate(context, childInst)
       if (transformedChild) {
-        transformedChild += cb()
+        transformedChild = cb(transformedChild)
         childModules.push(transformedChild)
       }
     }
@@ -26,7 +26,8 @@ function TransformModule (factory) {
     if (childModules.length == 1) {
       return childModules[0]
     } else if (childModules.length > 1) {
-      return _.first(childModules) + '.union([' + _.tail(childModules) + '])'
+      Globals.addJscadImport('booleans', 'union');
+      return 'union(' + context.indentString(childModules.join(',\n' + context.indent(-1))) + ')'
     }
   }
 }
@@ -45,18 +46,28 @@ ColorTransform.prototype.evaluate = function (parentContext, inst) {
   var context = Context.newContext(parentContext, ['c', 'alpha'], [], inst)
 
   var c = Context.contextVariableLookup(context, 'c', undefined)
-  var color = 'white'
+  var colorStr
+  var color
   if (c !== undefined) {
-    color = _.isString(c) ? colorNameLookup[Globals.stripString(c.toLowerCase())] : c
+    colorStr = Globals.stripString(c.toLowerCase())
+    color = colorNameLookup[colorStr]
+    if (!color) {
+      color = colorNameLookup.white
+      colorStr = undefined
+    }
   }
 
   var alpha = Context.contextVariableLookup(context, 'alpha', undefined)
   if (alpha !== undefined) {
+    colorStr = undefined // no alpha support for alphanumeric colors
     color[3] = alpha
   }
 
-  return this.transformChildren(inst.children, context, function () {
-    return _.template('.setColor(<%=color%>)')({ color: color })
+  Globals.addJscadImport('colors', 'colorize', 'colorNameToRgb')
+
+  // TODO: repeat after translate
+  return this.transformChildren(inst.children, context, function (value) {    
+    return `colorize([${colorStr ? `colorNameToRgb('${colorName}')`  : `[${color}]`}], ${value})`
   })
 }
 
@@ -80,13 +91,25 @@ MirrorTransform.prototype.evaluate = function (parentContext, inst) {
     v = [val, val, val]
   }
 
-  return this.transformChildren(inst.children, context, function () {
-    return _.template('.mirrored(CSG.Plane.fromNormalAndPoint([<%=v%>], [0,0,0]))')({ v: v })
+  Globals.addJscadImport('transforms', 'mirror', 'mirrorX', 'mirrorY', 'mirrorZ')
+
+  // TODO: repeat after translate
+  return this.transformChildren(inst.children, context, function (value) {
+    
+    return `mirror({normal: [${v}]}, ${context.indentString(value)})`
   })
 }
 
 function RotateTransform (a) {
   TransformModule.call(this, a)
+}
+
+/**
+ * Convert degrees to radians
+ * @param {number} degrees degrees
+ */
+function convertToRadians (degrees) {
+  return degrees + ' * Math.PI / 180'
 }
 
 RotateTransform.prototype.evaluate = function (parentContext, inst) {
@@ -100,14 +123,20 @@ RotateTransform.prototype.evaluate = function (parentContext, inst) {
 
   var a = Context.contextVariableLookup(context, 'a', undefined)
 
+  Globals.addJscadImport('transforms', 'rotate', 'rotateX', 'rotateY', 'rotateZ')
+
+  // TODO: repeat after translate
   if (_.isArray(a)) {
-    return this.transformChildren(inst.children, context, function () {
-      return _.template('.rotateX(<%=degreeX%>).rotateY(<%=degreeY%>).rotateZ(<%=degreeZ%>)')
-      ({ degreeX: a[0], degreeY: a[1], degreeZ: a[2] })
+    return this.transformChildren(inst.children, context, function (value) {
+      const rotations = a.map((r, idx) => r === 0 ? null : idx).filter(r => r !== null);
+      if (rotations.length === 1) {
+        return `rotate${"XYZ"[rotations[0]]}(${convertToRadians(a[rotations[0]])}, ${context.indentString(value)})`
+      }
+      return `rotate([${a.map(convertToRadians).join(', ')}], ${context.indentString(value)})`
     })
   } else {
     var v = Context.contextVariableLookup(context, 'v', undefined)
-    return this.transformChildren(inst.children, context, function () {
+    return this.transformChildren(inst.children, context, function (value) {
       if (v === undefined || v.toString() == '0,0,0') {
         v = [0, 0, 1]
       }
@@ -136,8 +165,11 @@ ScaleTransform.prototype.evaluate = function (parentContext, inst) {
     v = [val, val, val]
   }
 
-  return this.transformChildren(inst.children, context, function () {
-    return _.template('.scale([<%=v%>])')({ v: v })
+  Globals.addJscadImport('transforms', 'scale', 'scaleX', 'scaleY', 'scaleZ')
+
+  // TODO: repeat after translate
+  return this.transformChildren(inst.children, context, function (value) {
+    return `scale([${v}], ${value})`
   })
 }
 
@@ -156,9 +188,15 @@ TranslateTransform.prototype.evaluate = function (parentContext, inst) {
 
   var v = Context.contextVariableLookup(context, 'v', [0, 0, 0])
 
-  return this.transformChildren(inst.children, context, function () {
-    return _.template('.translate([<%=v%>])')({ v: v })
-  })
+  Globals.addJscadImport('transforms', 'translate', 'translateX', 'translateY', 'translateZ')
+
+  return `translate([${v}], ${
+    context.indentString(
+      this.transformChildren(
+        inst.children, context, (value) => context.indentString(value)
+      )
+    )
+  })`;
 }
 
 function RenderModule (a) {

@@ -23,6 +23,6 @@ module.exports = {
 
     var openJSCADResult = parser.parse(openSCADText)
 
-    return openJSCADResult.lines.join('\n')
+    return openJSCADResult.lines.flat(Infinity).join('\n')
   }
 }

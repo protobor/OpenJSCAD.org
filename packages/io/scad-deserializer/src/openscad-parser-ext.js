@@ -15,8 +15,6 @@ function resetModule () {
 
 function processModule (yy) {
   var lines = []
-  lines.push('function main(){')
-  lines.push('\n')
 
   var context = undefined
   if (yy.context !== undefined) {
@@ -32,6 +30,9 @@ function processModule (yy) {
   var res = currmodule.evaluate(context)
 
   var evaluatedLines = _.flatten(res)
+
+  lines.push (evaluatedLines)
+  /*
   if (evaluatedLines.length == 1) {
     lines.push('return ' + evaluatedLines[0] + ';')
   } else if (evaluatedLines.length > 1) {
@@ -39,15 +40,16 @@ function processModule (yy) {
     lines.push(_.tail(evaluatedLines))
     lines.push(']);')
   }
-  lines.push('};')
+  */
 
-  var x = { lines: lines, context: Globals.context_stack[Globals.context_stack.length - 1] }
+  var x = {lines:lines, context:Globals.context_stack[Globals.context_stack.length-1]}
   resetModule()
 
   return x
 }
 
 function stashModule (newName, newArgNames, newArgExpr) {
+  
   var p_currmodule = currmodule
   Globals.module_stack.push(currmodule)
 

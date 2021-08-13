@@ -22,7 +22,9 @@ Sphere.prototype.evaluate = function (parentContext, inst) {
 
   var openjscadParameters = { center: [0, 0, 0], resolution: resolution, radius: r }
 
-  return _.template('CSG.sphere({center: [<%=String(center)%>], radius: <%= radius %>, resolution: <%= resolution%>})')(openjscadParameters)
+  Globals.addJscadImport('primitives', 'sphere')
+
+  return `sphere({radius: ${d ? d/2 : r}, segments: ${resolution}})`
 }
 
 function Cylinder (a) {
@@ -44,12 +46,6 @@ Cylinder.prototype.evaluate = function (parentContext, inst) {
   var r1 = Context.contextVariableLookup(context, 'r1', undefined)
   var r2 = Context.contextVariableLookup(context, 'r2', undefined)
 
-  var startZ = isCentered ? -(h / 2) : 0
-  var endZ = isCentered ? h / 2 : h
-
-  openjscadArgs.start = [0, 0, startZ]
-  openjscadArgs.end = [0, 0, endZ]
-
   /* we have to check the context vars directly here in case a parent module in the context stack has the same parameters, e.g. r1 which would be used as default.
  Example testcad case:
       module ring(r1, r2, h) {
@@ -59,8 +55,7 @@ Cylinder.prototype.evaluate = function (parentContext, inst) {
 */
 
   if (_.has(context.vars, 'r')) {
-    openjscadArgs.radiusStart = r
-    openjscadArgs.radiusEnd = r
+    openjscadArgs.radius = r
   }
   if (_.has(context.vars, 'r1')) {
     openjscadArgs.radiusStart = r1
@@ -68,13 +63,18 @@ Cylinder.prototype.evaluate = function (parentContext, inst) {
   if (_.has(context.vars, 'r2')) {
     openjscadArgs.radiusEnd = r2
   }
-  openjscadArgs.resolution = Context.get_fragments_from_r(Math.max(openjscadArgs.radiusStart, openjscadArgs.radiusEnd), context)
+  openjscadArgs.resolution = Context.get_fragments_from_r(Math.max(openjscadArgs.radius || openjscadArgs.radiusStart, openjscadArgs.radius || openjscadArgs.radiusEnd), context)
 
   if (openjscadArgs.radiusStart == 0 && openjscadArgs.radiusEnd == 0) {
     return undefined
   }
 
-  return _.template('CSG.cylinder({start: [<%=start%>], end: [<%=end%>],radiusStart: <%=radiusStart%>, radiusEnd: <%=radiusEnd%>, resolution: <%=resolution%>})')(openjscadArgs)
+  const heightStr = isCentered ? `height: ${h}` : `height: ${h}, center: [0, 0, ${h/2}]`
+  const radiusStr = openjscadArgs.radius ? `radius: ${openjscadArgs.radius}` : `radiusStart: ${openjscadArgs.radiusStart}, radiusEnd: ${openjscadArgs.radiusEnd}`
+
+  Globals.addJscadImport('primitives', 'cylinder')
+
+  return `cylinder({${radiusStr}, ${heightStr}, segments: ${openjscadArgs.resolution}})`
 }
 
 function Cube (a) {
@@ -82,26 +82,28 @@ function Cube (a) {
 };
 
 Cube.prototype.evaluate = function (parentContext, inst) {
-  var context = Context.newContext(parentContext, ['size', 'center'], [], inst)
+  var context = Context.newContext(parentContext, ["size", "center"], [], inst)
 
   var openjscadArgs = { resolution: Globals.DEFAULT_RESOLUTION }
   var isCentered = Context.contextVariableLookup(context, 'center', false)
   var size = Context.contextVariableLookup(context, 'size', 1)
 
   if (size instanceof Array) {
-    openjscadArgs.radius = [size[0] / 2, size[1] / 2, size[2] / 2]
+    openjscadArgs.size = [size[0], size[1], size[2]]
   } else {
-    openjscadArgs.radius = [size / 2, size / 2, size / 2]
+    openjscadArgs.size = [size, size, size]
   }
 
-  if (isCentered) {
-    openjscadArgs.centerVector = [0, 0, 0]
-  } else {
-    openjscadArgs.centerVector = [openjscadArgs.radius[0], openjscadArgs.radius[1], openjscadArgs.radius[2]]
+  let centerString = ''
+  if (!isCentered) {
+    centerString = `, center: [${openjscadArgs.size[0]/2}, ${openjscadArgs.size[1]/2}, ${openjscadArgs.size[2]/2}]`
   }
 
-  return _.template('CSG.cube({center: [<%=String(centerVector)%>],radius: [<%= radius %>], resolution: <%= resolution%>})')(openjscadArgs)
-}
+  Globals.addJscadImport('primitives', 'cuboid')
+
+  return `cuboid({size: [${openjscadArgs.size}]${centerString}})`
+};
+
 
 function Circle (a) {
   PrimitiveModule.call(this, a)

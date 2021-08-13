@@ -15,6 +15,11 @@ function Module (name) {
 Module.prototype.evaluate = function (parentContext, inst) {
   var lines = []
 
+  // TODO: arguments
+  if (this.name !== 'root') {
+    lines.push ('\nfunction ' + this.name + '() {')
+  }
+
   var context = new Context(parentContext)
 
   if (parentContext === undefined) {
@@ -31,6 +36,14 @@ Module.prototype.evaluate = function (parentContext, inst) {
   context.inst_p = inst
   context.functions_p = this.functions
   context.modules_p = this.modules
+
+  lines.push (this.modules.map (module => module.evaluate (context)))
+
+  if (this.name === 'root') {
+
+    lines.push ('\nfunction main() {')
+  }
+
   _.each(this.assignments_var, function (value, key, list) {
     context.setVariable(key, value.evaluate(context))
   })
@@ -59,9 +72,20 @@ Module.prototype.evaluate = function (parentContext, inst) {
 
   var cleanedLines = _.compact(evaluatedLines)
   if (cleanedLines.length == 1) {
-    lines.push(cleanedLines[0])
+    lines.push('\treturn ' + cleanedLines[0])
   } else if (cleanedLines.length > 1) {
-    lines.push(_.head(cleanedLines) + '.union([' + _.tail(cleanedLines) + '])')
+    lines.push('\treturn [', context.indentList(cleanedLines), '\t]')
+  }
+
+  lines.push ('\n}\n')
+
+  if (this.name === 'root') {
+    for (const k of Object.keys(Globals.modules_to_import)) {
+      lines.unshift (`const { ${Object.keys(Globals.modules_to_import[k])} } = ${k}`)
+    }
+    lines.unshift(`const { ${Object.keys(Globals.modules_to_import).join()} } = jscad;`)
+    lines.unshift('const jscad = require(\'@jscad/modeling\') // modeling comes from the included MODELING library')
+    lines.push ('module.exports = {main};')
   }
 
   return lines
